@@ -11,6 +11,7 @@ def train():
         out_categories: list = ["M", "B"]
         in_features: list = ["area_worst"]
         shape: list = [len(in_features), 3, 3, len(out_categories)]
+        print(f"SHAPE: {shape}")
         batch_size = 3
 
         train_df, val_df = data()

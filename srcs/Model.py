@@ -8,14 +8,23 @@ class Model:
 
     def __init__(self, layers_shape: list[int], batch_size: int) -> None:
         # Layers_shape[1:] pour ignorer l'input
+        print(f"LAYER SHAPE: {layers_shape}")
+        for layer in range(1, len(layers_shape)):
+            print(f" Layer: {layer}")
+            print(f"Cur layer shape: {layers_shape[layer]}")
+            print(f"Prev Layer Shape: {layers_shape[layer-1]}")
         self.weights: np.ndarray = [
             np.random.randn(
                 layers_shape[layer], layers_shape[layer-1]
             ) for layer in range(1, len(layers_shape))
         ]
+        self.output_weights: np.ndarray = np.random.randn(
+            layers_shape[-1], layers_shape[-2])
         self.bias: np.ndarray = [
             np.zeros((layer, 1)) for layer in layers_shape[1:]
         ]
+        self.bias_output = np.zeros((layers_shape[-1], 1))
+        
         self.activations: np.ndarray = [
             np.zeros((layer, batch_size)) for layer in layers_shape[1:]
         ]
@@ -38,7 +47,11 @@ class Model:
     def __str__(self) -> str:
         msg = ""
         msg += f"Weights: ({len(self.weights)}, {len(self.weights[0])})\n"
+        msg += f"Weights Last Layer: ({len(self.output_weights)}, "
+        msg += f"{len(self.output_weights[0])})\n"
         msg += f"Bias: ({len(self.bias)}, {len(self.bias[0])})\n"
+        msg += f"Bias Last Layer: ({len(self.bias_output)}, "
+        msg += f"{len(self.bias_output[0])})\n"
         msg += f"Activations: ({len(self.activations)}, "
         msg += f"{len(self.activations[0])})\n"
         msg += f"Z: ({len(self.z)}, {len(self.z[0])})\n"
@@ -56,6 +69,10 @@ class Model:
         msg += f"Learning Rate: {self.learning_rate}\n"
         msg += f"Batch_size: {self.bacth_size}"
         return msg
+    
+    def print_shape(self, array: np.ndarray):
+        copy = np.zeros_like(array)
+        print(copy)
 
     class SizeDoNotMatch(Exception):
         def __init__(self, val1: str, val2: str):
@@ -106,11 +123,11 @@ class Model:
             self.z[idx]: np.ndarray = self.compute_activation_layer(
                 W, prev_activations, b)
             self.activations[idx] = self.sigmoid(self.z[idx])
+            print(f"SHAPE ACT IDX {idx}: {self.activations[idx].shape}")
         # Last activations
-        W, b = self.weights[-1], self.bias[-1]
         prev_activations = self.activations[-1]
         self.output_activation = self.compute_activation_layer(
-            W, prev_activations, b
+            self.output_weights, prev_activations, self.bias_output
         )
         self.softmax_output = self.softmax(self.output_activation)
 
@@ -163,15 +180,14 @@ class Model:
 
     def train(self, input: np.ndarray, label: np.ndarray):
         if input.shape[0] != self.input_layer.shape[0]:
-            print(input.shape[0])
-            print(self.input_layer.shape[0])
             raise self.SizeDoNotMatch("input", "input_layer")
         if label.shape != self.ground_truth.shape:
-            print("SHAPE:")
-            print(label.shape)
-            print(self.ground_truth.shape)
             raise self.SizeDoNotMatch("label", "ground_truth")
         print(self)
+        print(self.weights)
+        print(self.activations)
+        print(self.output_weights)
+        print(self.bias_output)
         # Pour le dernier batch ou cas ou il est incomplet
         self.input_layer[:, :input.shape[1]] = input
         self.ground_truth = label
