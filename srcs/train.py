@@ -8,18 +8,21 @@ import numpy as np
 
 def train():
     # try:
-        shape = [1, 3, 3, 2]
+        out_categories: list = ["M", "B"]
+        in_features: list = ["area_worst"]
+        shape: list = [len(in_features), 3, 3, len(out_categories)]
+        batch_size = 3
+
         train_df, val_df = data()
-        train_dataset: tuple = load_data(train_df)
-        val_dataset: tuple = load_data(val_df)
-        print("Train dataset:")
-        print(f"Inputs: {train_dataset[0].shape}")
-        print(f"Labels: {train_dataset[1].shape}")
-        print("Val dataset:")
-        print(f"Inputs: {val_dataset[0].shape}")
-        print(f"Labels: {val_dataset[1].shape}")
+        train_dataset: tuple = load_data(
+            train_df, batch_size, in_features, out_categories)
+        val_dataset: tuple = load_data(
+            val_df, batch_size, in_features, out_categories)
+        model = Model(shape, batch_size)
         for input, label in train_dataset:
-            
+            print(label.shape)
+            print(type(label))
+            model.train(input, label)
         # model = Model(shape, input_model, label)
         # print(model)
     # except Exception as e:

@@ -6,44 +6,56 @@ class Model:
     input_layer: np.ndarray
     output_layer: np.ndarray
 
-    def __init__(self, layers_shape: list[int]) -> None:
+    def __init__(self, layers_shape: list[int], batch_size: int) -> None:
+        # Layers_shape[1:] pour ignorer l'input
         self.weights: np.ndarray = [
             np.random.randn(
                 layers_shape[layer], layers_shape[layer-1]
-            ) for layer in range(1, layers_shape)
+            ) for layer in range(1, len(layers_shape))
         ]
-        # Layers_shape[1:] pour ignorer l'input
         self.bias: np.ndarray = [
-            np.zeros(layer, 1) for layer in layers_shape[1:]
+            np.zeros((layer, 1)) for layer in layers_shape[1:]
         ]
         self.activations: np.ndarray = [
-            np.zeros(layer, 1) for layer in layers_shape[1:]
+            np.zeros((layer, batch_size)) for layer in layers_shape[1:]
         ]
         self.z: np.ndarray = [
-            np.zeros(layer, 1) for layer in layers_shape[1:]
+            np.zeros((layer, batch_size)) for layer in layers_shape[1:]
         ]
         self.grads: np.ndarray = [np.zeros_like(W) for W in self.weights]
         self.grads_b: np.ndarray = [np.zeros_like(b) for b in self.bias]
-        self.output_activation: np.ndarray = np.zeros((layers_shape[-1], 1))
-        self.softmax_output: np.ndarray = np.zeros((layers_shape[-1], 1))
-        self.input_layer: np.ndarray = np.zeros((layers_shape[1], 1))
-        self.ground_truth: np.ndarray = np.zeros(layers_shape[-1], 1)
+        self.output_activation: np.ndarray = np.zeros(
+            (layers_shape[-1], batch_size))
+        self.softmax_output: np.ndarray = np.zeros(
+            (layers_shape[-1], batch_size))
+        self.input_layer: np.ndarray = np.zeros(
+            (layers_shape[0], batch_size))
+        self.ground_truth: np.ndarray = np.zeros(
+            (layers_shape[-1], batch_size))
         self.learning_rate: float = 0.7
+        self.bacth_size: int = batch_size
 
     def __str__(self) -> str:
-        print(f"Weights: {self.weights.shape}\n{self.weights}\n")
-        print(f"Bias: {self.bias.shape}\n{self.bias}")
-        print(f"Activations: {self.activations.shape}\n{self.activations}")
-        print(f"Z: {self.z.shape}\n{self.z}")
-        print(f"Grads: {self.grads.shape}\n{self.grads}")
-        print(f"Bias Grads: {self.grads_b.shape}\n{self.grads_b}")
-        print(f"Output Activations: {self.output_activation.shape}\n{self.output_activation}")
-        print(f"Softmax Output: {self.softmax_output.shape}\n{self.softmax_output}")
-        print(f"Input Layer: {self.input_layer.shape}\n{self.input_layer}")
-        print(f"Ground Truth: {self.ground_truth.shape}\n{self.ground_truth}")
-        print(f"Index: {self.index.shape}\n{self.index}")
-        print(f"Label: {self.label}\n{self.label}")
-        print(f"Learning Rate: {self.learning_rate}")
+        msg = ""
+        msg += f"Weights: ({len(self.weights)}, {len(self.weights[0])})\n"
+        msg += f"Bias: ({len(self.bias)}, {len(self.bias[0])})\n"
+        msg += f"Activations: ({len(self.activations)}, "
+        msg += f"{len(self.activations[0])})\n"
+        msg += f"Z: ({len(self.z)}, {len(self.z[0])})\n"
+        msg += f"Grads: ({len(self.grads)}, {len(self.grads[0])})\n"
+        msg += f"Bias Grads: ({len(self.grads_b)}, {len(self.grads_b[0])})\n"
+        msg += "Output Activations: ("
+        msg += f"{len(self.output_activation)}, "
+        msg += f"{len(self.output_activation[0])})\n"
+        msg += f"Softmax Output: ({len(self.softmax_output)}, "
+        msg += f"{len(self.softmax_output[0])})\n"
+        msg += f"Input Layer: ({len(self.input_layer)}, "
+        msg += f"{len(self.input_layer[0])})\n"
+        msg += f"Ground Truth: ({len(self.ground_truth)}, "
+        msg += f"{len(self.ground_truth[0])})\n"
+        msg += f"Learning Rate: {self.learning_rate}\n"
+        msg += f"Batch_size: {self.bacth_size}"
+        return msg
 
     class SizeDoNotMatch(Exception):
         def __init__(self, val1: str, val2: str):
@@ -52,6 +64,7 @@ class Model:
 
     def get_layer(self, indice: int) -> tuple[list[float], list[float]]:
         """Return first weights then bias"""
+        print(f"INDICE: {indice}")
         return self.weights[indice], self.bias[indice]
 
     def softmax(self, output_layer):
@@ -74,7 +87,9 @@ class Model:
     def compute_activation_layer(
         self, w: np.ndarray, prev_a: np.ndarray, bias: np.ndarray
     ):
-        if len(w) != len(prev_a[0]):
+        if w.shape[1] != prev_a.shape[0]:
+            print(f"W SHAPE {w.shape}")
+            print(f"A-1 SHAPE: {prev_a.shape}")
             raise self.SizeDoNotMatch("weights", "previous activations")
         if len(w) != len(bias):
             raise self.SizeDoNotMatch("weights", "bias")
@@ -91,7 +106,8 @@ class Model:
             self.z[idx]: np.ndarray = self.compute_activation_layer(
                 W, prev_activations, b)
             self.activations[idx] = self.sigmoid(self.z[idx])
-        W, b = self.get_layer(len(self.activations))
+        # Last activations
+        W, b = self.weights[-1], self.bias[-1]
         prev_activations = self.activations[-1]
         self.output_activation = self.compute_activation_layer(
             W, prev_activations, b
@@ -115,19 +131,27 @@ class Model:
         """
         for idx in range(len(self.grads) - 1, -1, -1):
             if idx == len(self.grads) - 1:
-                upper_grad: np.ndarray = self.output_softmax - self.ground_truth
+                upper_grad: np.ndarray = \
+                    self.output_softmax - self.ground_truth
             else:
                 upper_grad: np.ndarray = self.grads[idx + 1]
             w: np.ndarray = self.weights[idx]
             if len(w) != len(upper_grad):
                 raise self.SizeDoNotMatch("weights", "upper grad")
             propagated_error: np.ndarray = w.T @ upper_grad
-            self.grads_b[idx] = propagated_error * \
+            tmp_grads_b = propagated_error * \
                 self.partial_derivative_sigmoid(self.z[idx])
             if len(self.grads_b[idx]) != len(self.activations[idx - 1]):
                 raise self.SizeDoNotMatch(
                     "bias gradient", "previous activation")
-            self.grads[idx] = self.grads_b[idx] @ self.activations[idx - 1].T
+            # Division par batch_size pour avoir une moyenne des exemple du batch
+            self.grads[idx] = (
+                tmp_grads_b @ self.activations[idx - 1].T
+            ) / self.bacth_size
+            # Moyenne sur les lignes donc moyennes du batch
+            # (les colonnes sont les exemples,
+            # les lignes representes les neuronnes actuels)
+            self.grads_b[idx] = np.mean(tmp_grads_b, axis=1, keepdims=True)
         self.gradient_descent()
 
     def train_step(self):
@@ -138,10 +162,21 @@ class Model:
         pass
 
     def train(self, input: np.ndarray, label: np.ndarray):
-        if len(input) != len(self.input_layer):
+        if input.shape[0] != self.input_layer.shape[0]:
+            print(input.shape[0])
+            print(self.input_layer.shape[0])
             raise self.SizeDoNotMatch("input", "input_layer")
-        self.input_layer = input
-        pass
+        if label.shape != self.ground_truth.shape:
+            print("SHAPE:")
+            print(label.shape)
+            print(self.ground_truth.shape)
+            raise self.SizeDoNotMatch("label", "ground_truth")
+        print(self)
+        # Pour le dernier batch ou cas ou il est incomplet
+        self.input_layer[:, :input.shape[1]] = input
+        self.ground_truth = label
+        self.compute_activation()
+        print(self)
 
     def predict(self):
         pass

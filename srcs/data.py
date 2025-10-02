@@ -26,10 +26,10 @@ def one_hot_labels_encoding(
     labels: np.ndarray, categories: list[str]
 ) -> np.ndarray:
     """Encode labels for the model"""
-    encoded_labels = np.zeros((len(labels), len(categories)))
+    encoded_labels = np.zeros((len(categories), len(labels)))
     for idx, lab in enumerate(labels):
         g_t = categories.index(lab)
-        encoded_labels[idx][g_t] = 1
+        encoded_labels[g_t][idx] = 1
     return encoded_labels
 
 
@@ -45,17 +45,29 @@ def min_max_inputs_normalization(
     return (inputs - min_val) / norm_range
 
 
-def load_data(dataset: pd.DataFrame):
+def load_data(
+    dataset: pd.DataFrame,
+    batch_size: int,
+    in_features: list[str],
+    out_categories: list[str]
+) -> list[tuple]:
     """
     Loads and preprocesses the dataset for model training.
     """
     # Selection de la feature area_worst donc modele a une seule entree
-    inputs = dataset["area_worst"].to_numpy().reshape(-1, 1)
+    inputs = dataset[in_features].to_numpy().T
     labels = dataset["diagnosis"].to_numpy()
-    encoded_labels = one_hot_labels_encoding(labels, ["B", "M"])
+    encoded_labels = one_hot_labels_encoding(labels, out_categories)
     normalized_inputs = min_max_inputs_normalization(inputs)
-    assert len(normalized_inputs) == len(encoded_labels)
-    return (normalized_inputs, encoded_labels)
+
+    n_samples = len(normalized_inputs)
+    batches: list[tuple] = []
+    for i in range(0, n_samples, batch_size):
+        batch_inputs = normalized_inputs[:, i:i+batch_size]
+        batch_labels = encoded_labels[:, i:i+batch_size]
+        assert len(batch_inputs[0]) == len(batch_labels[0])
+        batches.append((batch_inputs, batch_labels))
+    return batches
 
 
 def discrimination_score(datas: pd.DataFrame):
