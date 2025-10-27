@@ -32,7 +32,7 @@ class Model:
         self.ground_truth: np.ndarray = np.zeros(
             (layers_shape[-1], batch_size))
         self.learning_rate: float = 0.7
-        self.bacth_size: int = batch_size
+        self.batch_size: int = batch_size
 
     def __str__(self) -> str:
         msg = ""
@@ -50,7 +50,7 @@ class Model:
         msg += f"Ground Truth: ({len(self.ground_truth)}, "
         msg += f"{len(self.ground_truth[0])})\n"
         msg += f"Learning Rate: {self.learning_rate}\n"
-        msg += f"Batch_size: {self.bacth_size}"
+        msg += f"Batch_size: {self.batch_size}"
         return msg
 
     class SizeDoNotMatch(Exception):
@@ -134,22 +134,24 @@ class Model:
                 tmp_grads_b: np.ndarray = \
                     self.softmax_output - self.ground_truth
             else:
-                upper_grad: np.ndarray = self.grads[idx + 1]
-                w: np.ndarray = self.weights[idx]
-                if w.shape[0] != upper_grad.shape[0]:
+                w: np.ndarray = self.weights[idx + 1]
+                if w.shape[0] != len(tmp_grads_b):
                     raise self.SizeDoNotMatch(
-                        "weights", "upper grad", w.shape, upper_grad.shape)
-                propagated_error: np.ndarray = w.T @ upper_grad
+                        "weights", "upper grad", w.shape, len(tmp_grads_b))
+                propagated_error: np.ndarray = w.T @ tmp_grads_b
                 tmp_grads_b = propagated_error * \
                     self.partial_derivative_sigmoid(self.z[idx])
-            print(f"SHAPE GRAD_B IDX {idx}: {tmp_grads_b.shape}")
-            if len(self.grads_b[idx]) != len(self.activations[idx]):
-                raise self.SizeDoNotMatch(
-                    "bias gradient", "previous activation")
+                if len(self.grads_b[idx]) != len(self.activations[idx]):
+                    raise self.SizeDoNotMatch(
+                        "bias gradient", "previous activation")
             # Division par batch_size pour avoir une moyenne des exemple du batch
+            if idx == 0:
+                prev_activations = self.input_layer
+            else:
+                prev_activations = self.activations[idx - 1]
             self.grads[idx] = (
-                tmp_grads_b @ self.activations[idx - 1].T
-            ) / self.bacth_size
+                tmp_grads_b @ prev_activations.T
+            ) / self.batch_size
             # Moyenne sur les lignes donc moyennes du batch
             # (les colonnes sont les exemples,
             # les lignes representes les neuronnes actuels)
