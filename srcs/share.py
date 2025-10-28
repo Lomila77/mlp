@@ -1,5 +1,4 @@
 
-from matplotlib import axes
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -49,13 +48,27 @@ def scatterplot_matrix(datas: pd.DataFrame):
     save_fig("scatterplot", "Matrix")
 
 
-def kdeplot(datas: pd.DataFrame):
+def kdeplot(datas: pd.DataFrame, columns: list[str], hue: str):
     sns.set_theme(style="ticks")
-    data_sliced = datas.columns[2:]
-    for col in data_sliced:
-        sns.kdeplot(data=datas, x=col, hue="diagnosis", fill=True)
+    for col in columns:
+        sns.kdeplot(data=datas, x=col, hue=hue, fill=True)
         save_fig(f"{col}", "KDEplot")
         plt.close()
+
+
+def plot_loss(loss_values: list[float], name: str = "loss"):
+    plt.figure(figsize=(12, 8))
+    df = pd.DataFrame({
+        "step": list(range(1, len(loss_values) + 1)),
+        "loss": loss_values
+    })
+    sns.lineplot(data=df, x="step", y="loss")
+    plt.title("Training loss")
+    plt.xlabel("Step")
+    plt.ylabel("Loss")
+    save_fig(name, "score")
+    plt.close()
+
 
 def save_fig(name: str, folder: str):
     """Save fig at folder given path, with the given name"""

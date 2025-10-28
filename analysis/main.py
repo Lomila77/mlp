@@ -23,7 +23,7 @@ def main():
         # bi_box_col(datas)
         # confusion_matrix(datas)
         # scatterplot_matrix(datas)
-        # kdeplot(datas)
+        # kdeplot(datas, datas.columns[:2], hue="diagnosis")
         # discrimination_score(datas)
         split_dataset(datas)
     except Exception as e:
