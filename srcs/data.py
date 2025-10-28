@@ -33,16 +33,18 @@ def one_hot_labels_encoding(
     return encoded_labels
 
 
-def min_max_inputs_normalization(
-    inputs: np.ndarray
-) -> np.ndarray:
+def min_max_inputs_normalization(inputs: np.ndarray) -> np.ndarray:
     """Normalize inputs for the model"""
-    min_val = inputs.min()
-    max_val = inputs.max()
-    norm_range = max_val - min_val
-    if norm_range == 0:
-        return np.zeros_like(inputs)
-    return (inputs - min_val) / norm_range
+    normalized_inputs = np.zeros_like(inputs)
+    for idx, inp in enumerate(inputs):
+        min_val = inp.min()
+        max_val = inp.max()
+        norm_range = max_val - min_val
+        if norm_range == 0:
+            normalized_inputs[idx] = np.zeros_like(inp)
+        else:
+            normalized_inputs[idx] = (inp - min_val) / norm_range
+    return normalized_inputs
 
 
 def load_data(
@@ -60,13 +62,15 @@ def load_data(
     encoded_labels = one_hot_labels_encoding(labels, out_categories)
     normalized_inputs = min_max_inputs_normalization(inputs)
 
-    n_samples = len(normalized_inputs)
+    n_samples = normalized_inputs.shape[1]  # Nombre de colonnes = nombre d'échantillons
+    print(f"N sample: {n_samples}")
     batches: list[tuple] = []
     for i in range(0, n_samples, batch_size):
         batch_inputs = normalized_inputs[:, i:i+batch_size]
         batch_labels = encoded_labels[:, i:i+batch_size]
         assert len(batch_inputs[0]) == len(batch_labels[0])
         batches.append((batch_inputs, batch_labels))
+    print(f"Len Batches: {len(batches)}")
     return batches
 
 
