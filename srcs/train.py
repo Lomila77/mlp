@@ -1,9 +1,6 @@
 from srcs.Model import Model
-from srcs.data import (
-    data,
-    load_data
-)
-from srcs.share import plot_loss
+from srcs.data import data, load_data
+from srcs.share import plot_loss, save_training
 
 
 def train():
@@ -23,10 +20,19 @@ def train():
 
         shape: list = [len(in_features), 3, 3, len(out_categories)]
         model = Model(shape, batch_size, learning_rate)
-    
         metrics = model.train(train_dataset, val_dataset, epochs)
+        save_training(
+            shape,
+            epochs,
+            learning_rate,
+            metrics["loss"],
+            metrics["v_loss"],
+            metrics["accuracy"],
+            metrics["precision"],
+            metrics["recall"]
+        )
         plot_loss(metrics["loss"])
-        plot_loss(metrics["v_loss"], name="v_losses")
+        plot_loss(metrics["v_loss"], name="Validation loss")
         print(f"Accuracy: {(metrics['accuracy'] * 100):.2f} %")
         print(f"Precision: {(metrics['precision'] * 100):.2f} %")
         print(f"Recall: {(metrics['recall'] * 100):.2f} %")

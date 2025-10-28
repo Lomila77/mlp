@@ -317,7 +317,6 @@ class Model:
             loss = []
             for input, label in train_dataset:
                 loss.append(self.train_step(input, label))
-                break
             losses.append(np.mean(loss))
             print(f"Cross-entropy loss: {losses[-1]:.8f}")
             print("=================")
@@ -325,7 +324,6 @@ class Model:
             v_loss = []
             for input, label in val_dataset:
                 v_loss.append(self.validation_step(input, label))
-                break
             v_losses.append(np.mean(v_loss))
             print(f"Cross-entropy loss: {v_losses[-1]:.8f}")
             print("====================================\n\n")
