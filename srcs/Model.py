@@ -1,14 +1,29 @@
 import json
 import numpy as np
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+)
 
 
 class Model:
     input_layer: np.ndarray
     output_layer: np.ndarray
 
-    def __init__(self, layers_shape: list[int], batch_size: int, learning_rate: float) -> None:
-        # Layers_shape[1:] pour ignorer l'input
+    def __init__(
+        self,
+        layers_shape: list[int],
+        batch_size: int,
+        learning_rate: float
+    ) -> None:
+        """Initialise the model.
 
+        Args:
+            layers_shape (list[int]): The shape of the model, it is adaptable
+            batch_size (int): The size of the batch -> How many example my model can ingest at the same time
+            learning_rate (float): The step of gradients update
+        """
         self.weights: np.ndarray = [
             np.random.randn(
                 layers_shape[layer], layers_shape[layer-1]
@@ -34,6 +49,9 @@ class Model:
         self.learning_rate: float = learning_rate
         self.batch_size: int = batch_size
         self.current_batch_size = batch_size
+        self.accuracy = []
+        self.precision = []
+        self.recall = []
 
     def __str__(self) -> str:
         msg = ""
@@ -69,26 +87,49 @@ class Model:
             super().__init__(msg)
 
     def get_layer(self, indice: int) -> tuple[list[float], list[float]]:
-        """Return first weights then bias"""
+        """Return the layer for the given index"""
         return self.weights[indice], self.bias[indice]
 
-    def softmax(self, output_layer):
-        """Output activation function"""
-        exps = np.exp(output_layer - np.max(output_layer, axis=0, keepdims=True))
+    def softmax(self, output_layer: np.ndarray):
+        """The output activation function. 
+        It tells probabilistic distribution of the output.
+
+        Args:
+            output_layer (np.ndarray): The output layer (z)
+
+        Returns:
+            np.ndarray: The probabilistic distribution
+        """
+        exps = np.exp(output_layer - np.max(
+            output_layer, axis=0, keepdims=True))
         return exps / np.sum(exps, axis=0, keepdims=True)
 
     def sigmoid(self, z: np.ndarray):
-        """Compression function avec clip pour eviter les overflow (exp)"""
+        """The activation function. It compress the score between 0 and 1.
+        "clip" is use to avoid overflow (because of using exp).
+
+        Returns:
+            np.ndarray: Return activations
+        """
         return 1 / (1 + np.exp(-np.clip(z, -500, 500))) 
 
     def partial_derivative_sigmoid(self, z: np.ndarray):
-        """Compute and return the partial derivative of z sigmoid"""
+        """Compute the partial derivative of sigmoid(z).
+        Needed to compute the derivative of activation on ponderate sum,
+        because i want know what is the variation between a and z.
+        We know, from z to a, we have the sigmoid function,
+        so the derivative of the sigmoid is the derivative of a by z.
+
+        Returns:
+            np.ndarray: The partial derivative sigmoid of the layer.
+        """
         sigmoid: np.ndarray = self.sigmoid(z)
         return sigmoid * (1 - sigmoid)
 
-    def compute_activation_layer(
+    def compute_ponderate_sum(
         self, w: np.ndarray, prev_a: np.ndarray, bias: np.ndarray
     ):
+        """Compute activation for only one layer"""
         if w.shape[1] != prev_a.shape[0]:
             raise self.SizeDoNotMatch("weights", "previous activations")
         if len(w) != len(bias):
@@ -96,19 +137,23 @@ class Model:
         return w @ prev_a + bias
 
     def compute_activation(self):
-        """Compute activation for the input given"""
+        """Compute activations.
+        Given the input layer, we compute the activation layer per layer.
+        At the end, for the last activation compute,
+        the activation function is a softmax.
+        """
         for idx in range(len(self.activations) - 1):
             if idx == 0:
                 prev_activations: np.ndarray = self.input_layer
             else:
                 prev_activations: np.ndarray = self.activations[idx-1]
             W, b = self.get_layer(idx)
-            self.z[idx]: np.ndarray = self.compute_activation_layer(
+            self.z[idx]: np.ndarray = self.compute_ponderate_sum(
                 W, prev_activations, b)
             self.activations[idx] = self.sigmoid(self.z[idx])
         # Last activations
         prev_activations = self.activations[-2]
-        output_activation = self.compute_activation_layer(
+        output_activation = self.compute_ponderate_sum(
             self.weights[-1], prev_activations, self.bias[-1]
         )
         self.softmax_output = self.softmax(output_activation)
@@ -117,7 +162,9 @@ class Model:
         """Loss function"""
         epsilon = 1e-15
         softmax_clipped = np.clip(self.softmax_output, epsilon, 1 - epsilon)
-        return -np.sum(self.ground_truth * np.log(softmax_clipped)) / self.current_batch_size
+        entropy = -np.sum(self.ground_truth * np.log(
+            softmax_clipped)) / self.current_batch_size
+        return entropy
 
     def gradient_descent(self) -> None:
         """Weights update after backpropagation"""
@@ -126,19 +173,44 @@ class Model:
             self.bias[idx] -= self.learning_rate * self.grads_b[idx]
 
     def backpropagation(self) -> None:
-        """
+        """Compute gradients to update the weights.
+        This algorythm start from the output layer and follow:
+        dCo/dW^L = dz^L/dW^L * da^L/dz^L * dCo/da^L
+    
+        This first step compute the cost variation for the activation:
+        -> dCo/da^L:
+        * (a^L - y) where "a" is the softmax output and "y" the labels.
+        * This compute combine implicitly the cross-entropy loss and the
+        softmax output.
 
+        For other layer we compute activation variation for the ponderate sum:
+        -> da^L/dz^L:
+        * o'(z^L) where "o'" is the partial derivative sigmoid and "z" the 
+        ponderate sum.
+
+        The last compute is very simple, by following the derivative rule,
+        with this calcul:
+        -> dz^L/dW^L
+        * We obtain a^L-1 
+        (f(W^L) = z^L = W^L * a^L-1 + b^L = 1 * a^L-1 + 0 = a^L-1)
+
+        And then the last compute:
+        -> dCo/dW^L
+        * With "tmp_grads_b" which are da^L/dz^L * dCo/da^L
+        * With "prev_activation wich are dz^L/dW^L
+        * We obtain the gradients for the given layer.
+        
+        TO NOTE: I process inputs on batches:
+        self.grads_b[idx] = np.mean(tmp_grads_b, axis=1, keepdims=True)
+        -> Its the mean of all batches (columns->axis=1), its like compression.
+
+        Raises:
+            self.SizeDoNotMatch: If size missmatch we trow an error
         """
         for idx in range(len(self.grads) - 1, -1, -1):
-            # Pour la couche la plus haute on calcul la variation du cout par rapoort au activation
-            # -> (a(L) - y) ou a(L) represente les activations de la derniere couche (softmax) et y les ground truths
-            # Ici on calcul dCo/da^L avec en sortie une cross entropy + softmax qui se calcul -> a^L - y
             if idx == len(self.grads) - 1:
                 tmp_grads_b: np.ndarray = \
                     self.softmax_output - self.ground_truth
-            
-            # Pour les autres couche on calcul la variation des activations par rapport aux sommes ponderees
-            # -> o'(z(L)) ou o' est la fonction d'activation et z(L) les sommes ponderees de la couche L
             else:
                 w: np.ndarray = self.weights[idx + 1]
                 if w.shape[0] != len(tmp_grads_b):
@@ -150,7 +222,6 @@ class Model:
                 if len(self.grads_b[idx]) != len(self.activations[idx]):
                     raise self.SizeDoNotMatch(
                         "bias gradient", "previous activation")
-            # Division par batch_size pour avoir une moyenne des exemple du batch
             if idx == 0:
                 prev_activations = self.input_layer
             else:
@@ -158,49 +229,141 @@ class Model:
             self.grads[idx] = (
                 tmp_grads_b @ prev_activations.T
             ) / self.current_batch_size
-            # Moyenne sur les lignes donc moyennes du batch
-            # (les colonnes sont les exemples,
-            # les lignes representes les neuronnes actuels)
             self.grads_b[idx] = np.mean(tmp_grads_b, axis=1, keepdims=True)
         self.gradient_descent()
 
-    def train(self, input: np.ndarray, label: np.ndarray) -> float:
+    def train_step(self, input: np.ndarray, label: np.ndarray) -> float:
+        """Train Step in the training process.
+        Note that input and label can be incomplete because of
+        processing per batches. It explain the slicing.
+
+        Args:
+            input (np.ndarray): Input batches
+            label (np.ndarray): Ground truth batches
+
+        Raises:
+            self.SizeDoNotMatch: If size doesn't match the feature number.
+
+        Returns:
+            float: Loss results
+        """
+        if input.shape[0] != self.input_layer.shape[0]:
+            raise self.SizeDoNotMatch("input", "input_layer")
+        if label.shape[0] != self.ground_truth.shape[0]:
+            raise self.SizeDoNotMatch("label", "ground_truth")
+        self.current_batch_size = input.shape[1]
+        self.input_layer[:, :self.current_batch_size] = input
+        self.ground_truth[:, :self.current_batch_size] = label
+        self.compute_activation()
+        loss = self.cross_entropy()
+        self.backpropagation()
+        return loss
+
+    def validation_step(self, input: np.ndarray, label: np.ndarray) -> float:
+        """The validation step in the training process.
+        Note that input and label can be incomplete because of
+        processing per batches. It explain the slicing.
+
+
+        Args:
+            input (np.ndarray): Input batches.
+            label (np.ndarray): Ground truth batches.
+
+        Raises:
+            self.SizeDoNotMatch: If size doesn't match the feature number.
+
+        Returns:
+            float: The loss results.
+        """
         if input.shape[0] != self.input_layer.shape[0]:
             raise self.SizeDoNotMatch("input", "input_layer")
         if label.shape[0] != self.ground_truth.shape[0]:
             raise self.SizeDoNotMatch("label", "ground_truth")
 
         self.current_batch_size = input.shape[1]
-        # Pour le dernier batch ou cas ou il est incomplet
         self.input_layer[:, :self.current_batch_size] = input
         self.ground_truth[:, :self.current_batch_size] = label
-        print("=================")
-        print("Compute Activation...")
         self.compute_activation()
         loss = self.cross_entropy()
-        print(f"Cross-entropy loss: {loss:.8f}")
-        #print(f"Res: {self.human_readable_output()}")
-        print("=================")
-        print("Backpropagation...")
-        self.backpropagation()
+        self.evaluation()
         return loss
-    
-    def human_readable_output(self):
-        res = []
-        print(self.softmax_output)
-        print(self.ground_truth)
-        for out, g_t in zip(self.softmax_output, self.ground_truth):
-            if g_t == 1:
-                if out > 0.5:
-                    res.append(True)
-                else:
-                    res.append(False)
-            else:
-                if out < 0.5:
-                    res.append(True)
-                else:
-                    res.append(False)
-        return res
+
+    def train(
+        self,
+        train_dataset: np.ndarray,
+        val_dataset: np.ndarray,
+        epochs: int
+    ) -> tuple[list, list]:
+        """Training process.
+        Display epochs and entropy loss.
+        The accuracy, precision and recall scores are automaticaly compute.
+
+        Args:
+            train_dataset (np.ndarray): Train dataset.
+            val_dataset (np.ndarray): Validation dataset.
+            epochs (int): The number of iteration on both dataset.
+
+        Returns:
+            dict: Returns loss, validation loss, accuracy, precision and recall
+        """
+        losses = []
+        v_losses = []
+
+        for epoch in range(epochs):
+            print("====================================")
+            print(f"Epochs: {epoch + 1}")
+            print("=================")
+            print("TRAIN:")
+            loss = []
+            for input, label in train_dataset:
+                loss.append(self.train_step(input, label))
+                break
+            losses.append(np.mean(loss))
+            print(f"Cross-entropy loss: {losses[-1]:.8f}")
+            print("=================")
+            print("VALIDATION:")
+            v_loss = []
+            for input, label in val_dataset:
+                v_loss.append(self.validation_step(input, label))
+                break
+            v_losses.append(np.mean(v_loss))
+            print(f"Cross-entropy loss: {v_losses[-1]:.8f}")
+            print("====================================\n\n")
+        return {
+            "loss": losses,
+            "v_loss": v_losses,
+            "accuracy": np.mean(self.accuracy),
+            "precision": np.mean(self.precision),
+            "recall": np.mean(self.recall)
+        }
+
+    def evaluation(self):
+        predictions = np.argmax(self.softmax_output, axis=0)
+        ground_truths = np.argmax(self.ground_truth, axis=0)
+
+        self.accuracy.append(accuracy_score(
+            predictions, ground_truths))
+        self.precision.append(precision_score(
+            predictions, ground_truths, average='weighted', zero_division=0.0))
+        self.recall.append(recall_score(
+            predictions, ground_truths, average='weighted', zero_division=0.0))
+
+    # def human_readable_output(self):
+    #     res = []
+    #     print(self.softmax_output)
+    #     print(self.ground_truth)
+    #     for out, g_t in zip(self.softmax_output, self.ground_truth):
+    #         if g_t == 1:
+    #             if out > 0.5:
+    #                 res.append(True)
+    #             else:
+    #                 res.append(False)
+    #         else:
+    #             if out < 0.5:
+    #                 res.append(True)
+    #             else:
+    #                 res.append(False)
+    #     return res
 
     def predict(self):
         pass
