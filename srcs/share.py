@@ -4,10 +4,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import os
-
-
-RESULTS_PATH = "./results/"
-ANALYSIS_PATH = "./analysis/graph/"
+import json
+from configs.config import RESULTS_PATH, ANALYSIS_PATH
 
 
 def hist_col(datas: pd.DataFrame):
@@ -75,49 +73,32 @@ def plot_loss(loss_values: list[float], name: str = "Loss"):
     plt.close()
 
 
-def save_training(
-    models_shape: list[int],
-    epochs: int,
-    learning_rate: float,
-    loss: list[float],
-    validation_loss: list[float],
-    accuracy: float,
-    precision: float,
-    recall: float
-) -> None:
+def save_training_metrics(metrics: dict) -> None:
     file_path = RESULTS_PATH + 'score/training_metrics.csv'
-    new_entry = {
-        'models_shape': str(models_shape),
-        'epochs': epochs,
-        'learning_rate': learning_rate,
-        'loss': np.mean(loss),
-        'validation_loss': np.mean(validation_loss),
-        'accuracy': accuracy,
-        'precision': precision,
-        'recall': recall
-    }
+    for key, val in metrics.items():
+        if isinstance(val, (np.floating, float)):
+            metrics[key] = f"{float(val):.2f}"
+        elif isinstance(val, (np.ndarray, list)):
+            metrics[key] = str(list(val))
+    df = pd.DataFrame([metrics])
     if os.path.exists(file_path):
-        df = pd.read_csv(file_path)
-        next_id = df['id'].max() + 1 if not df.empty else 1
+        next_id = pd.read_csv(
+            file_path)['id'].max() + 1 if not df.empty else 1
+        csv_kwargs = {'mode': 'a', 'header': False, 'index': False}
     else:
-        df = pd.DataFrame()
         next_id = 1
+        csv_kwargs = {'index': False}
+    df.insert(0, 'id', next_id)
+    df.to_csv(file_path, **csv_kwargs)
 
-    new_entry['id'] = next_id
-    df = pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True)
-    # Mettre les colonnes dans l'ordre
-    df = df[
-        [
-            'id',
-            'models_shape',
-            'epochs',
-            'learning_rate',
-            'loss',
-            'validation_loss',
-            'accuracy',
-            'precision',
-            'recall']]
-    df.to_csv(file_path, index=False)
+
+def save_min_max_training_data(
+    min_features: dict,
+    max_features: dict
+):
+    file_path = RESULTS_PATH + "utils/data_information.json"
+    with open(file_path, "+w") as f:
+        f.write(json.dumps([min_features, max_features]))
 
 
 def save_fig(name: str, folder: str):
