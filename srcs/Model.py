@@ -1,10 +1,11 @@
-import json
+import pickle
 import numpy as np
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
     recall_score,
 )
+from configs.config import MODEL_PATH
 
 
 class Model:
@@ -14,8 +15,9 @@ class Model:
     def __init__(
         self,
         layers_shape: list[int],
-        batch_size: int,
-        learning_rate: float
+        batch_size: int = 1,
+        learning_rate: float = 0.7,
+        load_last_checkpoint: bool = False
     ) -> None:
         """Initialise the model.
 
@@ -24,37 +26,47 @@ class Model:
             batch_size (int): The size of the batch -> How many example my model can ingest at the same time
             learning_rate (float): The step of gradients update
         """
-        self.weights: np.ndarray = [
-            np.random.randn(
-                layers_shape[layer], layers_shape[layer-1]
-            ) for layer in range(1, len(layers_shape))
-        ]
-        self.bias: np.ndarray = [
-            np.zeros((layer, 1)) for layer in layers_shape[1:]
-        ]
+        if load_last_checkpoint:
+            with open(MODEL_PATH, 'rb') as f:
+                model_checkpoint = pickle.load(f)
+            self.shape = model_checkpoint['shape']
+            self.weights = model_checkpoint['weights']
+            self.bias = model_checkpoint['bias']
+        else:
+            self.shape = layers_shape
+            self.weights: np.ndarray = [
+                np.random.randn(
+                    self.shape[layer], self.shape[layer-1]
+                ) for layer in range(1, len(self.shape))
+            ]
+            self.bias: np.ndarray = [
+                np.zeros((layer, 1)) for layer in self.shape[1:]
+            ]
         self.activations: np.ndarray = [
-            np.zeros((layer, batch_size)) for layer in layers_shape[1:]
+            np.zeros((layer, batch_size)) for layer in self.shape[1:]
         ]
         self.z: np.ndarray = [
-            np.zeros((layer, batch_size)) for layer in layers_shape[1:]
+            np.zeros((layer, batch_size)) for layer in self.shape[1:]
         ]
         self.grads: np.ndarray = [np.zeros_like(W) for W in self.weights]
         self.grads_b: np.ndarray = [np.zeros_like(b) for b in self.bias]
         self.softmax_output: np.ndarray = np.zeros(
-            (layers_shape[-1], batch_size))
+            (self.shape[-1], batch_size))
         self.input_layer: np.ndarray = np.zeros(
-            (layers_shape[0], batch_size))
+            (self.shape[0], batch_size))
         self.ground_truth: np.ndarray = np.zeros(
-            (layers_shape[-1], batch_size))
+            (self.shape[-1], batch_size))
         self.learning_rate: float = learning_rate
         self.batch_size: int = batch_size
         self.current_batch_size = batch_size
         self.accuracy = []
         self.precision = []
         self.recall = []
+        print(self)
 
     def __str__(self) -> str:
-        msg = ""
+        msg = "MODEL INFORMATION:\n"
+        msg += f"Shape: {self.shape}\n"
         msg += f"Weights: ({len(self.weights)}, {len(self.weights[0])})\n"
         msg += f"Bias: ({len(self.bias)}, {len(self.bias[0])})\n"
         msg += f"Activations: ({len(self.activations)}, "
@@ -69,8 +81,8 @@ class Model:
         msg += f"Ground Truth: ({len(self.ground_truth)}, "
         msg += f"{len(self.ground_truth[0])})\n"
         msg += f"Learning Rate: {self.learning_rate}\n"
-        msg += f"Batch_size: {self.batch_size}"
-        msg += f"Current batch_size: {self.current_batch_size} / {self.batch_size}"
+        msg += f"Batch_size: {self.batch_size}\n"
+        msg += f"Current batch_size: {self.current_batch_size} / {self.batch_size}\n"
         return msg
 
     class SizeDoNotMatch(Exception):
@@ -346,31 +358,26 @@ class Model:
         self.recall.append(recall_score(
             predictions, ground_truths, average='weighted', zero_division=0.0))
 
-    # def human_readable_output(self):
-    #     res = []
-    #     print(self.softmax_output)
-    #     print(self.ground_truth)
-    #     for out, g_t in zip(self.softmax_output, self.ground_truth):
-    #         if g_t == 1:
-    #             if out > 0.5:
-    #                 res.append(True)
-    #             else:
-    #                 res.append(False)
-    #         else:
-    #             if out < 0.5:
-    #                 res.append(True)
-    #             else:
-    #                 res.append(False)
-    #     return res
+    def human_readable_output(self):
+        if self.softmax_output[0] > self.softmax_output[1]:
+            return "M"
+        else:
+            return "B"
 
-    def predict(self):
-        pass
+    def predict(self, input: np.ndarray):
+        if input.shape[0] != self.input_layer.shape[0]:
+            raise self.SizeDoNotMatch("input", "input_layer")
+        self.current_batch_size = 1
+        self.input_layer[:, :self.current_batch_size] = input
+        self.compute_activation()
+        answer: str = self.human_readable_output()
+        return answer
 
     def save_model(self):
         """Save weights and bias into json file"""
-        with open("model.json", "w+") as file:
-            json_file: dict = {
-                "weights": self.weights,
-                "bias": self.bias
-            }
-            file.write(json.dumps(json_file))
+        with open(MODEL_PATH, 'wb') as f:
+            pickle.dump({
+                'shape': self.shape,
+                'weights': self.weights,
+                'bias': self.bias
+            }, f)
