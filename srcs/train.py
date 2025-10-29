@@ -1,41 +1,74 @@
 from srcs.Model import Model
 from srcs.data import data, load_data
-from srcs.share import plot_loss, save_training
+from srcs.share import (
+    plot_loss,
+    save_training_metrics,
+    save_min_max_training_data
+)
+from configs.config import (
+    FEATURES,
+    CATEGORIES,
+    BATCH_SIZE,
+    EPOCHS,
+    LEARNING_RATE,
+    MODEL_SHAPE
+)
+import numpy as np
+import pandas as pd
+
+
+def preprocess_data(
+    train_df: pd.DataFrame, val_df: pd.DataFrame
+) -> tuple[np.ndarray, np.ndarray]:
+    train_dataset: tuple = load_data(
+        train_df, BATCH_SIZE, FEATURES, CATEGORIES)
+    val_dataset: tuple = load_data(
+        val_df, BATCH_SIZE, FEATURES, CATEGORIES)
+    return train_dataset, val_dataset
+
+
+def save_training(
+    train_df: pd.DataFrame, model: Model, metrics: dict
+):
+    min_features = {}
+    max_features = {}
+    for ft in FEATURES:
+        min_features[ft] = train_df[ft].min()
+        max_features[ft] = train_df[ft].max()
+    save_min_max_training_data(min_features, max_features)
+    metrics["models_shape"] = MODEL_SHAPE
+    metrics["epochs"] = EPOCHS
+    metrics["learning_rate"] = LEARNING_RATE
+    plot_loss(metrics["loss"])
+    plot_loss(metrics["v_loss"], name="Validation loss")
+    print("====================================")
+    print("Results:")
+    print(f"Accuracy: {(metrics['accuracy'] * 100):.2f} %")
+    print(f"Precision: {(metrics['precision'] * 100):.2f} %")
+    print(f"Recall: {(metrics['recall'] * 100):.2f} %")
+    print("====================================")
+    last_loss = metrics["loss"][-1]
+    last_v_loss = metrics["v_loss"][-1]
+    del metrics["loss"]
+    del metrics["v_loss"]
+    metrics["loss"] = last_loss
+    metrics["v_loss"] = last_v_loss
+    save_training_metrics(metrics)
+    model.save_model()
 
 
 def train():
     try:
-        batch_size = 3
-        epochs = 80
-        learning_rate = 0.7
-
-        out_categories: list = ["M", "B"]
-        in_features: list = ["area_worst"]
         train_df, val_df = data()
-        train_dataset: tuple = load_data(
-            train_df, batch_size, in_features, out_categories)
-        val_dataset: tuple = load_data(
-            val_df, batch_size, in_features, out_categories)
-        print(f"Len dataset: {len(train_dataset)}")
-
-        shape: list = [len(in_features), 3, 3, len(out_categories)]
-        model = Model(shape, batch_size, learning_rate)
-        metrics = model.train(train_dataset, val_dataset, epochs)
-        save_training(
-            shape,
-            epochs,
-            learning_rate,
-            metrics["loss"],
-            metrics["v_loss"],
-            metrics["accuracy"],
-            metrics["precision"],
-            metrics["recall"]
+        train_dataset, val_dataset = preprocess_data(
+            train_df, val_df
         )
-        plot_loss(metrics["loss"])
-        plot_loss(metrics["v_loss"], name="Validation loss")
-        print(f"Accuracy: {(metrics['accuracy'] * 100):.2f} %")
-        print(f"Precision: {(metrics['precision'] * 100):.2f} %")
-        print(f"Recall: {(metrics['recall'] * 100):.2f} %")
+        print("\n\n====================================")
+        model = Model(MODEL_SHAPE, BATCH_SIZE, LEARNING_RATE)
+        print(f"Training on: {', '.join(FEATURES)}")
+        print("====================================\n\n")
+        metrics = model.train(train_dataset, val_dataset, EPOCHS)
+        save_training(train_df, model, metrics)
     except Exception as e:
         print(e)
 
