@@ -31,17 +31,42 @@ def one_hot_labels_encoding(
     return encoded_labels
 
 
+def min_max_n(min_v: float, max_v: float, value: float) -> float:
+    """Normalize one input for the given min / max.
+
+    Args:
+        min_v (float): min value in the scale
+        max_v (float): max value in the scale
+        value (float): the value to normalize
+
+    Returns:
+        float: The value normalized
+    """
+    norm_range = max_v - min_v
+    if norm_range == 0:
+        return 0
+    return (value - min_v) / norm_range
+
+
 def min_max_inputs_normalization(inputs: np.ndarray) -> np.ndarray:
-    """Normalize inputs for the model"""
+    """Normalize inputs for model ingestion.
+    Row are features input, columns are the number of example.
+
+    Args:
+        inputs (np.ndarray): Input to ingest
+
+    Returns:
+        np.ndarray: Normalized input
+    """
     normalized_inputs = np.zeros_like(inputs)
-    for idx, inp in enumerate(inputs):
-        min_val = inp.min()
-        max_val = inp.max()
+    for idx, feature in enumerate(inputs):
+        min_val = feature.min()
+        max_val = feature.max()
         norm_range = max_val - min_val
         if norm_range == 0:
-            normalized_inputs[idx] = np.zeros_like(inp)
+            normalized_inputs[idx] = np.zeros_like(feature)
         else:
-            normalized_inputs[idx] = (inp - min_val) / norm_range
+            normalized_inputs[idx] = (feature - min_val) / norm_range
     return normalized_inputs
 
 
@@ -61,14 +86,12 @@ def load_data(
     normalized_inputs = min_max_inputs_normalization(inputs)
 
     n_samples = normalized_inputs.shape[1]  # Nombre de colonnes = nombre d'échantillons
-    print(f"N sample: {n_samples}")
     batches: list[tuple] = []
     for i in range(0, n_samples, batch_size):
         batch_inputs = normalized_inputs[:, i:i+batch_size]
         batch_labels = encoded_labels[:, i:i+batch_size]
         assert len(batch_inputs[0]) == len(batch_labels[0])
         batches.append((batch_inputs, batch_labels))
-    print(f"Len Batches: {len(batches)}")
     return batches
 
 
@@ -122,14 +145,15 @@ def split_dataset(datas: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 def data() -> tuple[pd.DataFrame, pd.DataFrame]:
     try:
         datas = load_csv()
-        display_data(datas)
-        train_set, val_set = split_dataset(datas)
+        df_train, df_val = split_dataset(datas)
+        print("==============================================================")
         print("Train set:")
-        display_data(train_set)
+        display_data(df_train)
+        print("==============================================================")
         print("Val set:")
-        display_data(val_set)
-        print(train_set)
-        return train_set, val_set
+        display_data(df_val)
+        print("==============================================================")
+        return df_train, df_val
     except Exception as e:
         print(e)
 
