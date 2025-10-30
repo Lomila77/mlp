@@ -2,7 +2,8 @@ from srcs.Model import Model
 from srcs.data import data, load_data
 from srcs.share import (
     plot_loss,
-    save_training_metrics,
+    plot_metrics,
+    save_training_results,
     save_min_max_training_data
 )
 from configs.config import (
@@ -30,30 +31,33 @@ def preprocess_data(
 def save_training(
     train_df: pd.DataFrame, model: Model, metrics: dict
 ):
+    results = {}
     min_features = {}
     max_features = {}
     for ft in FEATURES:
         min_features[ft] = train_df[ft].min()
         max_features[ft] = train_df[ft].max()
     save_min_max_training_data(min_features, max_features)
-    metrics["models_shape"] = MODEL_SHAPE
-    metrics["epochs"] = EPOCHS
-    metrics["learning_rate"] = LEARNING_RATE
-    plot_loss(metrics["loss"])
-    plot_loss(metrics["v_loss"], name="Validation loss")
+    results["epochs"] = metrics["epochs"]
+    results["models_shape"] = MODEL_SHAPE
+    results["learning_rate"] = LEARNING_RATE
+    plot_loss(metrics["loss"], metrics["v_loss"])
+    results["loss"] = metrics["loss"][-1]
+    results["v_loss"] = metrics["v_loss"][-1]
+    plot_metrics(metrics)
+    results["accuracy"] = np.mean(metrics['accuracy'])
+    results["precision"] = np.mean(metrics['precision'])
+    results["recall"] = np.mean(metrics['recall'])
+    results["f1"] = np.mean(metrics['f1'])
+
     print("====================================")
     print("Results:")
-    print(f"Accuracy: {(metrics['accuracy'] * 100):.2f} %")
-    print(f"Precision: {(metrics['precision'] * 100):.2f} %")
-    print(f"Recall: {(metrics['recall'] * 100):.2f} %")
+    print(f"Accuracy: {(results['accuracy'] * 100):.2f} %")
+    print(f"Precision: {(results['precision'] * 100):.2f} %")
+    print(f"Recall: {(results['recall'] * 100):.2f} %")
+    print(f"f1: {(results['f1'] * 100):.2f} %")
     print("====================================")
-    last_loss = metrics["loss"][-1]
-    last_v_loss = metrics["v_loss"][-1]
-    del metrics["loss"]
-    del metrics["v_loss"]
-    metrics["loss"] = last_loss
-    metrics["v_loss"] = last_v_loss
-    save_training_metrics(metrics)
+    save_training_results(results)
     model.save_model()
 
 
@@ -67,8 +71,10 @@ def train():
         model = Model(MODEL_SHAPE, BATCH_SIZE, LEARNING_RATE)
         print(f"Training on: {', '.join(FEATURES)}")
         print("====================================\n\n")
-        metrics = model.train(train_dataset, val_dataset, EPOCHS)
-        save_training(train_df, model, metrics)
+        results = model.train(train_dataset, val_dataset, EPOCHS)
+        save_training(train_df, model, results)
+    except KeyboardInterrupt:
+        print("Early stopping kill during saving results, files be missing")
     except Exception as e:
         print(e)
 
