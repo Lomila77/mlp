@@ -23,7 +23,9 @@ def load_csv(path: str = "./data.csv") -> pd.DataFrame:
 def one_hot_labels_encoding(
     labels: np.ndarray, categories: list[str]
 ) -> np.ndarray:
-    """Encode labels for the model"""
+    """Encode labels for the model
+    0 = "M" | 1 = "B"
+    """
     encoded_labels = np.zeros((len(categories), len(labels)))
     for idx, lab in enumerate(labels):
         g_t = categories.index(lab)
