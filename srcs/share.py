@@ -59,28 +59,66 @@ def kdeplot(datas: pd.DataFrame, columns: list[str], hue: str):
         plt.close()
 
 
-def plot_loss(loss_values: list[float], name: str = "Loss"):
-    plt.figure(figsize=(12, 8))
-    df = pd.DataFrame({
-        "step": list(range(1, len(loss_values) + 1)),
-        "loss": loss_values
-    })
-    sns.lineplot(data=df, x="step", y="loss")
-    plt.title(name)
-    plt.xlabel("Step")
-    plt.ylabel(name)
+def multi_line_plot(
+    df: pd.DataFrame,
+    name: str = "Loss"
+):
+    sns.set_theme(style="darkgrid")
+    sns.set_context(context="paper")
+    plt.figure(figsize=(10, 6))
+    ax = sns.lineplot(data=df, x="step", y="value", hue="type", marker='o')
+    ax.set_title(name)
+    ax.set_xlabel("Step")
+    ax.set_ylabel(name)
+    ax.set_ylim(0, 1)
+    plt.legend(title="Courbe")
+    plt.tight_layout()
     save_fig(name, RESULTS_PATH + "graph")
     plt.close()
 
 
-def save_training_metrics(metrics: dict) -> None:
-    file_path = RESULTS_PATH + 'score/training_metrics.csv'
-    for key, val in metrics.items():
+def plot_loss(
+    loss_values: list[float],
+    v_losses_values: list[float],
+):
+    if len(loss_values) > len(v_losses_values):
+        loss_values = loss_values[:len(v_losses_values)]
+    steps = list(range(1, len(loss_values) + 1))
+    df = pd.DataFrame({
+        "step": steps + steps,
+        "value": loss_values + v_losses_values,
+        "type": ["Loss"] * len(loss_values) +
+                ["Validation loss"] * len(v_losses_values)
+    })
+    multi_line_plot(df)
+
+
+def plot_metrics(metrics: dict):
+
+    accuracy: list[float] = metrics["accuracy"]
+    precisiosn: list[float] = metrics["precision"]
+    recall: list[float] = metrics["recall"]
+    f1: list[float] = metrics["f1"]
+    steps = list(range(1, len(accuracy) + 1))
+    df = pd.DataFrame({
+        "step": steps * 4,
+        "value": accuracy + precisiosn + recall + f1,
+        "type": ["Accuracy"] * len(accuracy) +
+                ["Precision"] * len(precisiosn) +
+                ["Recall"] * len(recall) +
+                ["F1"] * len(f1)
+    })
+    multi_line_plot(df, name="Metrics")
+
+
+def save_training_results(results: dict) -> None:
+    file_path = RESULTS_PATH + 'score/training_results.csv'
+    for key, val in results.items():
         if isinstance(val, (np.floating, float)):
-            metrics[key] = f"{float(val):.2f}"
+            results[key] = f"{float(val):.2f}"
         elif isinstance(val, (np.ndarray, list)):
-            metrics[key] = str(list(val))
-    df = pd.DataFrame([metrics])
+            results[key] = str(list(val))
+    df = pd.DataFrame([results])
     if os.path.exists(file_path):
         next_id = pd.read_csv(
             file_path)['id'].max() + 1 if not df.empty else 1
