@@ -1,10 +1,5 @@
 import pickle
 import numpy as np
-from sklearn.metrics import (
-    accuracy_score,
-    precision_score,
-    recall_score,
-)
 from configs.config import MODEL_PATH
 
 
@@ -59,9 +54,12 @@ class Model:
         self.learning_rate: float = learning_rate
         self.batch_size: int = batch_size
         self.current_batch_size = batch_size
-        self.accuracy = []
-        self.precision = []
-        self.recall = []
+        self.loss = []
+        self.v_loss = []
+        self.accuracy_score = []
+        self.precision_score = []
+        self.recall_score = []
+        self.f1_score = []
         print(self)
 
     def __str__(self) -> str:
@@ -148,11 +146,11 @@ class Model:
             raise self.SizeDoNotMatch("weights", "bias")
         return w @ prev_a + bias
 
-    def compute_activation(self):
-        """Compute activations.
+    def forward_pass(self):
+        """Compute activations of the networks.
         Given the input layer, we compute the activation layer per layer.
-        At the end, for the last activation compute,
-        the activation function is a softmax.
+        At the end the last activation compute is a softmax.
+        Feedforward: the data flows from the input layer to the output layer.
         """
         for idx in range(len(self.activations) - 1):
             if idx == 0:
@@ -266,7 +264,7 @@ class Model:
         self.current_batch_size = input.shape[1]
         self.input_layer[:, :self.current_batch_size] = input
         self.ground_truth[:, :self.current_batch_size] = label
-        self.compute_activation()
+        self.forward_pass()
         loss = self.cross_entropy()
         self.backpropagation()
         return loss
@@ -295,10 +293,16 @@ class Model:
         self.current_batch_size = input.shape[1]
         self.input_layer[:, :self.current_batch_size] = input
         self.ground_truth[:, :self.current_batch_size] = label
-        self.compute_activation()
+        self.forward_pass()
         loss = self.cross_entropy()
-        self.evaluation()
-        return loss
+        acc, pre, rec, f1 = self.evaluation()
+        return {
+            "loss": loss,
+            "accuracy": acc,
+            "precision": pre,
+            "recall": rec,
+            "f1": f1
+        }
 
     def train(
         self,
@@ -318,45 +322,90 @@ class Model:
         Returns:
             dict: Returns loss, validation loss, accuracy, precision and recall
         """
-        losses = []
-        v_losses = []
+        try:
+            current_epoch = 0
+            for epoch in range(epochs):
+                current_epoch = epoch
+                print("====================================")
+                print(f"Epochs: {epoch + 1}")
+                print("=================")
+                print("TRAIN:")
+                loss = []
+                for input, label in train_dataset:
+                    loss.append(self.train_step(input, label))
+                self.loss.append(np.mean(loss))
+                print(f"Cross-entropy loss: {self.loss[-1]:.8f}")
+                print("=================")
+                print("VALIDATION:")
+                v_loss = []
+                acc = []
+                pre = []
+                rec = []
+                f1 = []
+                for input, label in val_dataset:
+                    metrics = self.validation_step(input, label)
+                    v_loss.append(metrics["loss"])
+                    acc.append(metrics["accuracy"])
+                    pre.append(metrics["precision"])
+                    rec.append(metrics["recall"])
+                    f1.append(metrics["f1"])
+                self.accuracy_score.append(np.mean(acc))
+                self.precision_score.append(np.mean(pre))
+                self.recall_score.append(np.mean(rec))
+                self.f1_score.append(np.mean(f1))
+                self.v_loss.append(np.mean(v_loss))
+                print(f"Cross-entropy loss: {self.v_loss[-1]:.8f}")
+                print("====================================\n\n")
+            return {
+                "epochs": epochs,
+                "loss": self.loss,
+                "v_loss": self.v_loss,
+                "accuracy": self.accuracy_score,
+                "precision": self.precision_score,
+                "recall": self.recall_score,
+                "f1": self.f1_score
+            }
+        except KeyboardInterrupt:
+            return {
+                "epochs": current_epoch,
+                "loss": self.loss,
+                "v_loss": self.v_loss,
+                "accuracy": self.accuracy_score,
+                "precision": self.precision_score,
+                "recall": self.recall_score,
+                "f1": self.f1_score
+            }
+        except Exception as e:
+            raise e
 
-        for epoch in range(epochs):
-            print("====================================")
-            print(f"Epochs: {epoch + 1}")
-            print("=================")
-            print("TRAIN:")
-            loss = []
-            for input, label in train_dataset:
-                loss.append(self.train_step(input, label))
-            losses.append(np.mean(loss))
-            print(f"Cross-entropy loss: {losses[-1]:.8f}")
-            print("=================")
-            print("VALIDATION:")
-            v_loss = []
-            for input, label in val_dataset:
-                v_loss.append(self.validation_step(input, label))
-            v_losses.append(np.mean(v_loss))
-            print(f"Cross-entropy loss: {v_losses[-1]:.8f}")
-            print("====================================\n\n")
-        return {
-            "loss": losses,
-            "v_loss": v_losses,
-            "accuracy": np.mean(self.accuracy),
-            "precision": np.mean(self.precision),
-            "recall": np.mean(self.recall)
-        }
+    def accuracy(self, preds, truths):
+        return np.mean(preds == truths)
 
-    def evaluation(self):
+    def precision(self, preds, truths):
+        tp = np.sum((preds == 1) & (truths == 1))
+        fp = np.sum((preds == 1) & (truths == 0))
+        return tp / (tp + fp) if tp + fp > 0 else 0
+
+    def recall(self, preds, truths):
+        tp = np.sum((preds == 1) & (truths == 1))
+        fn = np.sum((preds == 0) & (truths == 1))
+        return tp / (tp + fn) if tp + fn > 0 else 0
+
+    def f1(self, pre, rec):
+        return 2 * (pre * rec) / (pre + rec) if pre + rec > 0 else 0
+
+    def evaluation(self) -> tuple[float, float, float, float]:
         predictions = np.argmax(self.softmax_output, axis=0)
         ground_truths = np.argmax(self.ground_truth, axis=0)
 
-        self.accuracy.append(accuracy_score(
-            predictions, ground_truths))
-        self.precision.append(precision_score(
-            predictions, ground_truths, average='weighted', zero_division=0.0))
-        self.recall.append(recall_score(
-            predictions, ground_truths, average='weighted', zero_division=0.0))
+        acc = self.accuracy(predictions, ground_truths)
+        pre = self.precision(predictions, ground_truths)
+        rec = self.recall(predictions, ground_truths)
+        f1_ = self.f1(pre, rec)
+
+        return acc, pre, rec, f1_
+
+
 
     def human_readable_output(self):
         if self.softmax_output[0] > self.softmax_output[1]:
@@ -369,7 +418,7 @@ class Model:
             raise self.SizeDoNotMatch("input", "input_layer")
         self.current_batch_size = 1
         self.input_layer[:, :self.current_batch_size] = input
-        self.compute_activation()
+        self.forward_pass()
         answer: str = self.human_readable_output()
         return answer
 
