@@ -18,7 +18,11 @@ def load_csv(path: str = "./data.csv") -> pd.DataFrame:
         "compactness_worst", "concavity_worst", "concave_points_worst",
         "symmetry_worst", "fractal_dimension_worst"
     ]
-    return pd.read_csv(path, names=cols, header=None)
+    df = pd.read_csv(path, header=None, names=cols)
+    df.columns = cols
+    df.to_csv("./data_columns.csv", index=False)
+    return df
+
 
 def one_hot_labels_encoding(
     labels: np.ndarray, categories: list[str]
@@ -155,8 +159,8 @@ def data():
         print("Val set:")
         display_data(df_val)
         print("==============================================================")
-        df_train.to_csv(TRAIN_DATASET_PATH)
-        df_val.to_csv(VAL_DATASET_PATH)
+        df_train.to_csv(TRAIN_DATASET_PATH, index=False, header=False)
+        df_val.to_csv(VAL_DATASET_PATH, index=False, header=False)
     except Exception as e:
         print(e)
 
