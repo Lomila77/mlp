@@ -1,5 +1,5 @@
 from srcs.Model import Model
-from srcs.data import data, load_data
+from srcs.data import load_csv, load_data
 from srcs.share import (
     plot_loss,
     plot_metrics,
@@ -12,7 +12,9 @@ from configs.config import (
     BATCH_SIZE,
     EPOCHS,
     LEARNING_RATE,
-    MODEL_SHAPE
+    MODEL_SHAPE,
+    TRAIN_DATASET_PATH,
+    VAL_DATASET_PATH
 )
 import numpy as np
 import pandas as pd
@@ -63,7 +65,8 @@ def save_training(
 
 def train():
     try:
-        train_df, val_df = data()
+        train_df = load_csv(TRAIN_DATASET_PATH)
+        val_df = load_csv(VAL_DATASET_PATH)
         train_dataset, val_dataset = preprocess_data(
             train_df, val_df
         )

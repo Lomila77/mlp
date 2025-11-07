@@ -405,8 +405,6 @@ class Model:
 
         return acc, pre, rec, f1_
 
-
-
     def human_readable_output(self):
         if self.softmax_output[0] > self.softmax_output[1]:
             return "M"

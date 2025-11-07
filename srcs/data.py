@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import os
+from configs.config import TRAIN_DATASET_PATH, VAL_DATASET_PATH
 
 
 def load_csv(path: str = "./data.csv") -> pd.DataFrame:
@@ -18,7 +19,6 @@ def load_csv(path: str = "./data.csv") -> pd.DataFrame:
         "symmetry_worst", "fractal_dimension_worst"
     ]
     return pd.read_csv(path, names=cols, header=None)
-
 
 def one_hot_labels_encoding(
     labels: np.ndarray, categories: list[str]
@@ -144,7 +144,7 @@ def split_dataset(datas: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     return train_dataset, validation_dataset
 
 
-def data() -> tuple[pd.DataFrame, pd.DataFrame]:
+def data():
     try:
         datas = load_csv()
         df_train, df_val = split_dataset(datas)
@@ -155,7 +155,8 @@ def data() -> tuple[pd.DataFrame, pd.DataFrame]:
         print("Val set:")
         display_data(df_val)
         print("==============================================================")
-        return df_train, df_val
+        df_train.to_csv(TRAIN_DATASET_PATH)
+        df_val.to_csv(VAL_DATASET_PATH)
     except Exception as e:
         print(e)
 
