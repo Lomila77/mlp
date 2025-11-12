@@ -1,10 +1,20 @@
-FEATURES = ["area_worst", "concavity_mean", "perimeter_worst", "radius_worst"]
+FEATURES = [
+        "radius_mean", "texture_mean", "perimeter_mean", "area_mean",
+        "compactness_mean", "concavity_mean",
+        "concave_points_mean", "symmetry_mean",
+        "radius_se", "perimeter_se", "area_se",
+        "concave_points_se",
+        "radius_worst", "texture_worst",
+        "perimeter_worst", "area_worst", "smoothness_worst",
+        "compactness_worst", "concavity_worst", "concave_points_worst",
+        "symmetry_worst", "fractal_dimension_worst"
+    ]
 CATEGORIES = ["M", "B"]
 
-BATCH_SIZE = 6
-EPOCHS = 8
-LEARNING_RATE = 0.7
-MODEL_SHAPE = [len(FEATURES), 4, len(CATEGORIES)]
+BATCH_SIZE = 4
+EPOCHS = 40000
+LEARNING_RATE = 0.0001
+MODEL_SHAPE = [len(FEATURES), 64, 128, 64, len(CATEGORIES)]
 
 RESULTS_PATH = "./results/"
 ANALYSIS_PATH = "./analysis/graph/"
