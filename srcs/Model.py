@@ -56,6 +56,8 @@ class Model:
         self.current_batch_size = batch_size
         self.loss = []
         self.v_loss = []
+        self.sparse_loss = []
+        self.v_sparse_loss = []
         self.accuracy_score = []
         self.precision_score = []
         self.recall_score = []
@@ -168,12 +170,25 @@ class Model:
         )
         self.softmax_output = self.softmax(output_activation)
 
-    def cross_entropy(self) -> float:
+    def binary_cross_entropy(self) -> float:
         """Loss function"""
         epsilon = 1e-15
         softmax_clipped = np.clip(self.softmax_output, epsilon, 1 - epsilon)
         entropy = -np.sum(self.ground_truth * np.log(
             softmax_clipped)) / self.current_batch_size
+        return entropy
+
+    def sparse_categorical_cross_entropy(self) -> float:
+        """Fonction de perte sparse categorical cross entropy (indices de classes en ground_truth)."""
+        epsilon = 1e-15
+        m = self.current_batch_size
+        softmax_clipped = np.clip(self.softmax_output, epsilon, 1 - epsilon)
+        # self.ground_truth doit être de forme (num_classes, batch_size) (one-hot) ou (1, batch_size) (indices)
+        if self.ground_truth.shape[0] > 1:
+            targets = np.argmax(self.ground_truth[:, :m], axis=0)
+        else:
+            targets = self.ground_truth[0, :m].astype(int)
+        entropy = -np.sum(np.log(softmax_clipped[targets, np.arange(m)])) / m
         return entropy
 
     def gradient_descent(self) -> None:
@@ -265,9 +280,10 @@ class Model:
         self.input_layer[:, :self.current_batch_size] = input
         self.ground_truth[:, :self.current_batch_size] = label
         self.forward_pass()
-        loss = self.cross_entropy()
+        loss = self.binary_cross_entropy()
+        sparse = self.sparse_categorical_cross_entropy()
         self.backpropagation()
-        return loss
+        return loss, sparse
 
     def validation_step(self, input: np.ndarray, label: np.ndarray) -> float:
         """The validation step in the training process.
@@ -294,10 +310,12 @@ class Model:
         self.input_layer[:, :self.current_batch_size] = input
         self.ground_truth[:, :self.current_batch_size] = label
         self.forward_pass()
-        loss = self.cross_entropy()
+        loss = self.binary_cross_entropy()
+        sparse = self.sparse_categorical_cross_entropy()
         acc, pre, rec, f1 = self.evaluation()
         return {
             "loss": loss,
+            "sparse": sparse,
             "accuracy": acc,
             "precision": pre,
             "recall": rec,
@@ -331,13 +349,19 @@ class Model:
                 print("=================")
                 print("TRAIN:")
                 loss = []
+                sparse_loss = []
                 for input, label in train_dataset:
-                    loss.append(self.train_step(input, label))
+                    l, s_l = self.train_step(input, label)
+                    loss.append(l)
+                    sparse_loss.append(s_l)
                 self.loss.append(np.mean(loss))
-                print(f"Cross-entropy loss: {self.loss[-1]:.8f}")
+                self.sparse_loss.append(np.mean(loss))
+                print(f"Binary cross-entropy loss: {self.loss[-1]:.8f}")
+                print(f"Sparse cross-entropy loss: {self.sparse_loss[-1]:.8f}")
                 print("=================")
                 print("VALIDATION:")
                 v_loss = []
+                v_sparse_loss = []
                 acc = []
                 pre = []
                 rec = []
@@ -345,6 +369,7 @@ class Model:
                 for input, label in val_dataset:
                     metrics = self.validation_step(input, label)
                     v_loss.append(metrics["loss"])
+                    v_sparse_loss.append(metrics["sparse"])
                     acc.append(metrics["accuracy"])
                     pre.append(metrics["precision"])
                     rec.append(metrics["recall"])
@@ -354,7 +379,9 @@ class Model:
                 self.recall_score.append(np.mean(rec))
                 self.f1_score.append(np.mean(f1))
                 self.v_loss.append(np.mean(v_loss))
-                print(f"Cross-entropy loss: {self.v_loss[-1]:.8f}")
+                self.v_sparse_loss.append(np.mean(v_sparse_loss))
+                print(f"Binary cross-entropy loss: {self.v_loss[-1]:.8f}")
+                print(f"Sparse cross-entropy loss: {self.v_sparse_loss[-1]:.8f}")
                 print("====================================\n\n")
             return {
                 "epochs": epochs,

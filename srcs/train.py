@@ -43,6 +43,7 @@ def save_training(
     results["epochs"] = metrics["epochs"]
     results["models_shape"] = MODEL_SHAPE
     results["learning_rate"] = LEARNING_RATE
+    results["batch_size"] = BATCH_SIZE
     plot_loss(metrics["loss"], metrics["v_loss"])
     results["loss"] = metrics["loss"][-1]
     results["v_loss"] = metrics["v_loss"][-1]

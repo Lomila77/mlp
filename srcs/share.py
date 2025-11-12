@@ -115,7 +115,7 @@ def save_training_results(results: dict) -> None:
     file_path = RESULTS_PATH + 'score/training_results.csv'
     for key, val in results.items():
         if isinstance(val, (np.floating, float)):
-            results[key] = f"{float(val):.2f}"
+            results[key] = f"{float(val):.3f}"
         elif isinstance(val, (np.ndarray, list)):
             results[key] = str(list(val))
     df = pd.DataFrame([results])
